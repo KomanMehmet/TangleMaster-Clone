@@ -1,4 +1,4 @@
-# 🎮 Rope Untangle 3D
+# Tangle Master 3D
 
 A production-ready Unity 3D hyper-casual game template featuring rope puzzle mechanics, built with clean architecture and industry-standard practices.
 
