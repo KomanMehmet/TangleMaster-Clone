@@ -1,66 +1,67 @@
-﻿using _Project.Scripts.Core.Interfaces;
-using DG.Tweening;
+﻿using _Project.Scripts.Gameplay.Rope;
 using UnityEngine;
+using DG.Tweening;
 
 namespace _Project.Scripts.Gameplay.Pin
 {
+    /// <summary>
+    /// Fixed pin at the bottom where ropes can be attached
+    /// Pins don't move - only rope endpoints move between pins
+    /// </summary>
     [RequireComponent(typeof(Collider))]
-    public class Pin : MonoBehaviour, IPin
+    public class Pin : MonoBehaviour
     {
-        [Header("Ping Settings")] 
+        [Header("Pin Settings")]
         [SerializeField] private int pinId;
-        [SerializeField] private bool isDraggable = true;
-        [SerializeField] private float dragHeight = 0.1f;
         
-        [Header("Visual Feedback")]
+        [Header("Visual")]
         [SerializeField] private Color normalColor = Color.white;
-        [SerializeField] private Color selectedColor  = Color.yellow;
-        [SerializeField] private Color dragColor  = Color.green;
-
-        [Header("Animation")] 
-        [SerializeField] private float scaleMultiplier = 1.2f;
-        [SerializeField] private float animationDuration = 0.2f;
-        [SerializeField] private Ease scaleEase = Ease.OutBack;
+        [SerializeField] private Color occupiedColor = Color.yellow;
+        [SerializeField] private Color highlightColor = Color.green;
         
+        [Header("Animation")]
+        [SerializeField] private float highlightScaleMultiplier = 1.2f;
+        [SerializeField] private float animationDuration = 0.2f;
+
         private Renderer pinRenderer;
         private MaterialPropertyBlock propertyBlock;
         private Vector3 originalScale;
-        private Vector3 dragOffset;
-        private bool isDragging;
-        private Plane dragPlane;
         private Tween scaleTween;
         private Tween colorTween;
         
-        
-        #region IPin Implementation
+        private Rope.Rope attachedRope;
+        private bool isOccupied;
+
+        #region Properties
 
         public int PinId => pinId;
         public Vector3 Position => transform.position;
         public Transform Transform => transform;
-        public bool IsDragging => isDragging;
-        public bool IsDraggable => isDraggable;
+        public bool IsOccupied => isOccupied;
+        public Rope.Rope AttachedRope => attachedRope;
 
         #endregion
+
+        #region Unity Lifecycle
 
         private void Awake()
         {
             pinRenderer = GetComponent<Renderer>();
-
             if (pinRenderer == null)
             {
                 pinRenderer = GetComponentInChildren<Renderer>();
             }
-            
+
             propertyBlock = new MaterialPropertyBlock();
             originalScale = transform.localScale;
-
-            dragPlane = new Plane(Vector3.up, transform.position);
+            
+            SetColor(normalColor);
         }
 
         private void OnDestroy()
         {
-            scaleTween.Kill();
-            colorTween.Kill();
+            scaleTween?.Kill();
+            colorTween?.Kill();
         }
 
         private void OnValidate()
@@ -70,79 +71,81 @@ namespace _Project.Scripts.Gameplay.Pin
                 pinId = GetInstanceID();
             }
         }
-        
-        #region IPin Methods
 
-        public void OnSelected()
-        {
-            if (!isDraggable) return;
-
-            SetColor(selectedColor);
-            AnimateScale(originalScale * scaleMultiplier);
-        }
-
-        public void OnDeselected()
-        {
-            SetColor(normalColor);
-            AnimateScale(originalScale);
-        }
-
-        public void UpdatePosition(Vector3 newPosition)
-        {
-            transform.position = newPosition;
-        }
-        
         #endregion
-        
-        #region Drag System
 
-        public void StartDrag()
+        #region Rope Attachment
+
+        /// <summary>
+        /// Attach a rope to this pin
+        /// </summary>
+        public void AttachRope(Rope.Rope rope)
         {
-            if (!isDraggable) return;
+            if (isOccupied && attachedRope != rope)
+            {
+                Debug.LogWarning($"[Pin {pinId}] Already occupied by another rope!");
+                return;
+            }
 
-            isDragging = true;
-            SetColor(dragColor);
-            AnimateScale(originalScale * scaleMultiplier);
+            attachedRope = rope;
+            isOccupied = true;
+            
+            SetColor(occupiedColor);
+            PlayPulseAnimation();
 
-#if UNITY_EDITOR
-            Debug.Log($"[Pin {pinId}] Started dragging");
-#endif
+            Debug.Log($"[Pin {pinId}] Rope attached");
         }
 
-        public void DragTo(Vector3 targetWorldPosition)
+        /// <summary>
+        /// Detach rope from this pin
+        /// </summary>
+        public void DetachRope()
         {
-            if (!isDragging) return;
-
-            UpdatePosition(targetWorldPosition);
+            if (attachedRope != null)
+            {
+                attachedRope = null;
+                isOccupied = false;
+                
+                SetColor(normalColor);
+                
+                Debug.Log($"[Pin {pinId}] Rope detached");
+            }
         }
 
-        public void EndDrag()
+        /// <summary>
+        /// Check if this pin can accept a rope
+        /// </summary>
+        public bool CanAcceptRope()
         {
-            if (!isDragging) return;
-
-            isDragging = false;
-            SetColor(normalColor);
-            AnimateScale(originalScale);
-
-#if UNITY_EDITOR
-            Debug.Log($"[Pin {pinId}] Ended dragging");
-#endif
+            return !isOccupied;
         }
-        
+
         #endregion
-        
+
         #region Visual Feedback
+
+        public void Highlight(bool highlight)
+        {
+            if (highlight)
+            {
+                SetColor(highlightColor);
+                AnimateScale(originalScale * highlightScaleMultiplier);
+            }
+            else
+            {
+                SetColor(isOccupied ? occupiedColor : normalColor);
+                AnimateScale(originalScale);
+            }
+        }
 
         private void SetColor(Color targetColor)
         {
             if (pinRenderer == null) return;
-            
+
             colorTween?.Kill();
-            
+
             pinRenderer.GetPropertyBlock(propertyBlock);
-            
             Color currentColor = propertyBlock.GetColor("_BaseColor");
-            
             if (currentColor == Color.clear)
             {
                 currentColor = propertyBlock.GetColor("_Color");
@@ -166,33 +169,25 @@ namespace _Project.Scripts.Gameplay.Pin
         private void AnimateScale(Vector3 targetScale)
         {
             scaleTween?.Kill();
-            
-            scaleTween = transform
-                .DOScale(targetScale, animationDuration)
-                .SetEase(scaleEase);
+            scaleTween = transform.DOScale(targetScale, animationDuration).SetEase(Ease.OutBack);
         }
-        
-        public void PlayBounceAnimation()
+
+        public void PlayPulseAnimation()
         {
             scaleTween?.Kill();
             
-            Sequence bounceSequence = DOTween.Sequence();
-            bounceSequence.Append(transform.DOScale(originalScale * 1.3f, 0.1f).SetEase(Ease.OutQuad));
-            bounceSequence.Append(transform.DOScale(originalScale, 0.2f).SetEase(Ease.OutBounce));
+            Sequence pulseSequence = DOTween.Sequence();
+            pulseSequence.Append(transform.DOScale(originalScale * 1.3f, 0.1f));
+            pulseSequence.Append(transform.DOScale(originalScale, 0.2f).SetEase(Ease.OutBounce));
         }
-        
-        public void PlayShakeAnimation()
-        {
-            transform.DOShakePosition(0.3f, strength: 0.1f, vibrato: 20, randomness: 90f);
-        }
-        
+
         #endregion
-        
+
         #region Gizmos
 
         private void OnDrawGizmos()
         {
-            Gizmos.color = isDraggable ? Color.green : Color.red;
+            Gizmos.color = isOccupied ? Color.red : Color.green;
             Gizmos.DrawWireSphere(transform.position, 0.2f);
         }
 
@@ -200,6 +195,10 @@ namespace _Project.Scripts.Gameplay.Pin
         {
             Gizmos.color = Color.yellow;
             Gizmos.DrawWireSphere(transform.position, 0.3f);
+            
+            #if UNITY_EDITOR
+            UnityEditor.Handles.Label(transform.position + Vector3.up * 0.5f, $"Pin {pinId}");
+            #endif
         }
 
         #endregion

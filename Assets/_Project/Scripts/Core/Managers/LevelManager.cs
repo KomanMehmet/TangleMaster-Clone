@@ -11,37 +11,43 @@ using UnityEngine;
 
 namespace _Project.Scripts.Core.Managers
 {
+    /// <summary>
+    /// Manages level loading, win condition checking, and level progression
+    /// Spawns anchors, pins, and ropes based on LevelData
+    /// </summary>
     public class LevelManager : MonoBehaviour, IManager
     {
         public static LevelManager Instance { get; private set; }
-        
+
         [Header("Current Level")]
         [SerializeField] private LevelData currentLevelData;
         [SerializeField] private int currentLevelIndex = 0;
-        
+
         [Header("Level Collection")]
         [SerializeField] private List<LevelData> allLevels = new List<LevelData>();
-        
+
         [Header("Prefabs")]
+        [SerializeField] private GameObject anchorPrefab;
         [SerializeField] private GameObject pinPrefab;
-        
+
         [Header("Spawning")]
+        [SerializeField] private Transform anchorsParent;
         [SerializeField] private Transform pinsParent;
         [SerializeField] private Transform levelRoot;
-        
+
         [Header("Event Channels")]
         [SerializeField] private VoidEventChannel onLevelStarted;
         [SerializeField] private VoidEventChannel onLevelCompleted;
         [SerializeField] private VoidEventChannel onLevelFailed;
         [SerializeField] private IntEventChannel onLevelNumberChanged;
-        
+
+        private List<Anchor> spawnedAnchors = new List<Anchor>();
         private List<Pin> spawnedPins = new List<Pin>();
-        private List<IRope> spawnedRopes = new List<IRope>();
-        private bool isCheckingWinCondition = false;
+        private List<Rope> spawnedRopes = new List<Rope>();
         private CancellationTokenSource winCheckCts;
         private int moveCount = 0;
         private float levelStartTime;
-        
+
         #region Properties
 
         public LevelData CurrentLevel => currentLevelData;
@@ -51,7 +57,9 @@ namespace _Project.Scripts.Core.Managers
         public bool IsLevelActive { get; private set; }
 
         #endregion
-        
+
+        #region Unity Lifecycle
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -64,18 +72,8 @@ namespace _Project.Scripts.Core.Managers
             Initialize();
         }
 
-        private void OnDestroy()
-        {
-            if (Instance == this)
-            {
-                Cleanup();
-                Instance = null;
-            }
-        }
-        
         private void Start()
         {
-            // Load the first level on start
             if (currentLevelData != null)
             {
                 LoadCurrentLevel();
@@ -90,10 +88,28 @@ namespace _Project.Scripts.Core.Managers
             }
         }
 
+        private void OnDestroy()
+        {
+            if (Instance == this)
+            {
+                Cleanup();
+                Instance = null;
+            }
+        }
+
+        #endregion
+
         #region IManager Implementation
 
         public void Initialize()
         {
+            if (anchorsParent == null)
+            {
+                GameObject parent = new GameObject("Anchors");
+                anchorsParent = parent.transform;
+                anchorsParent.SetParent(transform);
+            }
+
             if (pinsParent == null)
             {
                 GameObject parent = new GameObject("Pins");
@@ -129,9 +145,9 @@ namespace _Project.Scripts.Core.Managers
         }
 
         #endregion
-        
+
         #region Level Loading
-        
+
         public void LoadLevel(int levelIndex)
         {
             if (levelIndex < 0 || levelIndex >= allLevels.Count)
@@ -144,7 +160,7 @@ namespace _Project.Scripts.Core.Managers
             currentLevelData = allLevels[levelIndex];
             LoadCurrentLevel();
         }
-        
+
         public void LoadCurrentLevel()
         {
             if (currentLevelData == null)
@@ -157,20 +173,19 @@ namespace _Project.Scripts.Core.Managers
             SpawnLevel();
             StartLevel();
         }
-        
+
         public void ReloadLevel()
         {
             LoadCurrentLevel();
         }
-        
+
         public void LoadNextLevel()
         {
             int nextIndex = currentLevelIndex + 1;
-            
+
             if (nextIndex >= allLevels.Count)
             {
                 Debug.Log("[LevelManager] All levels completed!");
-                // TODO: Show all levels completed screen
                 return;
             }
 
@@ -178,24 +193,60 @@ namespace _Project.Scripts.Core.Managers
         }
 
         #endregion
-        
+
         #region Level Spawning
 
         private void SpawnLevel()
         {
             if (currentLevelData == null) return;
-            
+
+            // Spawn anchors
+            foreach (var anchorConfig in currentLevelData.Anchors)
+            {
+                SpawnAnchor(anchorConfig);
+            }
+
+            // Spawn pins
             foreach (var pinConfig in currentLevelData.Pins)
             {
                 SpawnPin(pinConfig);
             }
-            
+
+            // Spawn ropes
             foreach (var ropeConfig in currentLevelData.Ropes)
             {
                 SpawnRope(ropeConfig);
             }
 
-            Debug.Log($"[LevelManager] Spawned {spawnedPins.Count} pins and {spawnedRopes.Count} ropes.");
+            Debug.Log($"[LevelManager] Spawned {spawnedAnchors.Count} anchors, {spawnedPins.Count} pins, and {spawnedRopes.Count} ropes.");
+        }
+
+        private void SpawnAnchor(LevelData.AnchorConfiguration config)
+        {
+            if (anchorPrefab == null)
+            {
+                Debug.LogError("[LevelManager] Anchor prefab is not assigned!");
+                return;
+            }
+
+            GameObject anchorObj = Instantiate(anchorPrefab, config.position, Quaternion.identity, anchorsParent);
+            anchorObj.name = $"Anchor_{config.anchorId}";
+
+            Anchor anchor = anchorObj.GetComponent<Anchor>();
+            if (anchor == null)
+            {
+                Debug.LogError($"[LevelManager] Anchor prefab doesn't have Anchor component!");
+                Destroy(anchorObj);
+                return;
+            }
+
+            // Set anchor ID via reflection
+            var anchorIdField = typeof(Anchor).GetField("anchorId",
+                System.Reflection.BindingFlags.NonPublic |
+                System.Reflection.BindingFlags.Instance);
+            anchorIdField?.SetValue(anchor, config.anchorId);
+
+            spawnedAnchors.Add(anchor);
         }
 
         private void SpawnPin(LevelData.PinConfiguration config)
@@ -216,16 +267,12 @@ namespace _Project.Scripts.Core.Managers
                 Destroy(pinObj);
                 return;
             }
-            
-            var pinIdField = typeof(Pin).GetField("pinId", 
-                System.Reflection.BindingFlags.NonPublic | 
+
+            // Set pin ID via reflection
+            var pinIdField = typeof(Pin).GetField("pinId",
+                System.Reflection.BindingFlags.NonPublic |
                 System.Reflection.BindingFlags.Instance);
             pinIdField?.SetValue(pin, config.pinId);
-
-            var isDraggableField = typeof(Pin).GetField("isDraggable", 
-                System.Reflection.BindingFlags.NonPublic | 
-                System.Reflection.BindingFlags.Instance);
-            isDraggableField?.SetValue(pin, config.isDraggable);
 
             spawnedPins.Add(pin);
         }
@@ -238,25 +285,33 @@ namespace _Project.Scripts.Core.Managers
                 return;
             }
 
-            if (config.startPinIndex < 0 || config.startPinIndex >= spawnedPins.Count ||
-                config.endPinIndex < 0 || config.endPinIndex >= spawnedPins.Count)
+            if (config.anchorIndex < 0 || config.anchorIndex >= spawnedAnchors.Count)
             {
-                Debug.LogError($"[LevelManager] Invalid rope connection: {config.startPinIndex} -> {config.endPinIndex}");
+                Debug.LogError($"[LevelManager] Invalid anchor index: {config.anchorIndex}");
                 return;
             }
 
-            Pin startPin = spawnedPins[config.startPinIndex];
-            Pin endPin = spawnedPins[config.endPinIndex];
+            if (config.pinIndex < 0 || config.pinIndex >= spawnedPins.Count)
+            {
+                Debug.LogError($"[LevelManager] Invalid pin index: {config.pinIndex}");
+                return;
+            }
 
-            IRope rope = RopeManager.Instance.CreateRope(startPin, endPin);
-            
+            Anchor anchor = spawnedAnchors[config.anchorIndex];
+            Pin pin = spawnedPins[config.pinIndex];
+
+            Rope rope = RopeManager.Instance.CreateRope(anchor, pin, config.sortingOrder);
+
             if (rope != null)
             {
                 spawnedRopes.Add(rope);
                 
                 if (config.customColor != Color.clear)
                 {
-                    rope.SetColor(config.customColor);
+                    Debug.Log($"[LevelManager] Applying custom color to rope: {config.customColor}");
+            
+                    // Animasyon yerine direkt set et
+                    rope.SetColorImmediate(config.customColor); // ← YENİ METOD
                 }
             }
         }
@@ -272,13 +327,25 @@ namespace _Project.Scripts.Core.Managers
                 winCheckCts.Dispose();
                 winCheckCts = null;
             }
-    
+
+            // Clear ropes
             if (RopeManager.Instance != null)
             {
                 RopeManager.Instance.ClearAllRopes();
             }
             spawnedRopes.Clear();
-    
+
+            // Clear anchors
+            foreach (var anchor in spawnedAnchors)
+            {
+                if (anchor != null)
+                {
+                    Destroy(anchor.gameObject);
+                }
+            }
+            spawnedAnchors.Clear();
+
+            // Clear pins
             foreach (var pin in spawnedPins)
             {
                 if (pin != null)
@@ -293,7 +360,7 @@ namespace _Project.Scripts.Core.Managers
         }
 
         #endregion
-        
+
         #region Level Flow
 
         private void StartLevel()
@@ -305,13 +372,12 @@ namespace _Project.Scripts.Core.Managers
             onLevelStarted?.RaiseEvent();
             onLevelNumberChanged?.RaiseEvent(currentLevelData.LevelNumber);
 
-            // Start win condition checking
             winCheckCts = new CancellationTokenSource();
             StartWinConditionCheck(winCheckCts.Token).Forget();
 
             Debug.Log($"[LevelManager] Started {currentLevelData.LevelName}");
         }
-        
+
         public void IncrementMoveCount()
         {
             if (!IsLevelActive) return;
@@ -334,7 +400,7 @@ namespace _Project.Scripts.Core.Managers
             onLevelCompleted?.RaiseEvent();
 
             Debug.Log($"[LevelManager] Level {currentLevelData.LevelNumber} completed! Moves: {moveCount}, Time: {ElapsedTime:F2}s");
-            
+
             PlaySuccessAnimations().Forget();
         }
 
@@ -351,7 +417,7 @@ namespace _Project.Scripts.Core.Managers
         }
 
         #endregion
-        
+
         #region Win Condition
 
         private async UniTaskVoid StartWinConditionCheck(CancellationToken cancellationToken)
@@ -363,7 +429,7 @@ namespace _Project.Scripts.Core.Managers
                 if (CheckWinCondition())
                 {
                     await UniTask.Delay(
-                        TimeSpan.FromSeconds(currentLevelData.WinCheckDelay), 
+                        TimeSpan.FromSeconds(currentLevelData.WinCheckDelay),
                         cancellationToken: cancellationToken
                     );
 
@@ -374,7 +440,6 @@ namespace _Project.Scripts.Core.Managers
                     }
                 }
 
-                // Check every frame
                 await UniTask.Yield(cancellationToken);
             }
         }
@@ -383,7 +448,7 @@ namespace _Project.Scripts.Core.Managers
         {
             if (!IsLevelActive) return false;
             if (RopeManager.Instance == null) return false;
-            
+
             if (currentLevelData.RequireNoCollisions)
             {
                 bool anyColliding = RopeManager.Instance.AnyRopesColliding();
@@ -394,42 +459,49 @@ namespace _Project.Scripts.Core.Managers
         }
 
         #endregion
-        
+
         #region Animations
 
         private async UniTaskVoid PlaySuccessAnimations()
         {
             foreach (var rope in spawnedRopes)
             {
-                if (rope is Rope ropeComponent)
-                {
-                    ropeComponent.PlaySuccessAnimation();
-                }
+                rope.PlaySuccessAnimation();
             }
 
-            await UniTask.Delay(System.TimeSpan.FromSeconds(0.3f));
-            
+            await UniTask.Delay(TimeSpan.FromSeconds(0.3f));
+
             foreach (var pin in spawnedPins)
             {
-                pin.PlayBounceAnimation();
-                await UniTask.Delay(System.TimeSpan.FromSeconds(0.1f));
+                pin.PlayPulseAnimation();
+                await UniTask.Delay(TimeSpan.FromSeconds(0.1f));
             }
         }
 
         #endregion
-        
+
         #region Public Helpers
-        
+
+        public Anchor GetAnchorById(int anchorId)
+        {
+            return spawnedAnchors.Find(a => a.AnchorId == anchorId);
+        }
+
         public Pin GetPinById(int pinId)
         {
             return spawnedPins.Find(p => p.PinId == pinId);
         }
-                
+
+        public List<Anchor> GetAllAnchors()
+        {
+            return new List<Anchor>(spawnedAnchors);
+        }
+
         public List<Pin> GetAllPins()
         {
             return new List<Pin>(spawnedPins);
         }
-        
+
         #endregion
     }
 }

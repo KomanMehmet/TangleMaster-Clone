@@ -15,30 +15,45 @@ MonoBehaviour:
   levelNumber: 1
   levelName: Level 1
   difficulty: 0
+  anchors:
+  - anchorId: 0
+    position: {x: -0.5, y: 5, z: 0}
+    customColor: {r: 0, g: 0, b: 0, a: 0}
+  - anchorId: 1
+    position: {x: 0.5, y: 5, z: 0}
+    customColor: {r: 0, g: 0, b: 0, a: 0}
+  - anchorId: 1
+    position: {x: 0, y: 5, z: 0}
+    customColor: {r: 0, g: 0, b: 0, a: 0}
   pins:
   - pinId: 0
-    position: {x: 0, y: 0, z: 2}
-    isDraggable: 1
+    position: {x: -2, y: 0, z: 0}
     customColor: {r: 0, g: 0.8893428, b: 1, a: 1}
   - pinId: 1
-    position: {x: 2, y: 0, z: 0}
-    isDraggable: 1
+    position: {x: -1, y: 0, z: 0}
     customColor: {r: 0, g: 0.8901961, b: 1, a: 1}
   - pinId: 2
-    position: {x: 0, y: 0, z: -2}
-    isDraggable: 1
+    position: {x: 0, y: 0, z: 0}
     customColor: {r: 0, g: 0.8901961, b: 1, a: 1}
   - pinId: 3
-    position: {x: -2, y: 0, z: 0}
-    isDraggable: 1
+    position: {x: 1, y: 0, z: 0}
+    customColor: {r: 0, g: 0.8901961, b: 1, a: 1}
+  - pinId: 3
+    position: {x: 2, y: 0, z: 0}
     customColor: {r: 0, g: 0.8901961, b: 1, a: 1}
   ropes:
-  - startPinIndex: 0
-    endPinIndex: 2
-    customColor: {r: 0, g: 0, b: 0, a: 0}
-  - startPinIndex: 1
-    endPinIndex: 3
-    customColor: {r: 0, g: 0, b: 0, a: 0}
+  - anchorIndex: 0
+    pinIndex: 3
+    sortingOrder: 0
+    customColor: {r: 1, g: 0, b: 0, a: 1}
+  - anchorIndex: 1
+    pinIndex: 1
+    sortingOrder: 1
+    customColor: {r: 0.2637477, g: 1, b: 0, a: 1}
+  - anchorIndex: 2
+    pinIndex: 4
+    sortingOrder: 2
+    customColor: {r: 0.2637477, g: 1, b: 0, a: 1}
   winCheckDelay: 0.5
   requireNoCollisions: 1
   moveLimit: 0

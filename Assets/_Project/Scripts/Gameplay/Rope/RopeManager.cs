@@ -5,24 +5,31 @@ using UnityEngine;
 
 namespace _Project.Scripts.Gameplay.Rope
 {
+    /// <summary>
+    /// Manages all ropes in the scene
+    /// Handles rope creation, collision detection, and cleanup
+    /// </summary>
     public class RopeManager : MonoBehaviour, IManager
     {
         public static RopeManager Instance { get; private set; }
-        
+
         [Header("Configuration")]
         [SerializeField] private RopeData defaultRopeData;
         [SerializeField] private Transform ropeParent;
-        
+
         [Header("Prefabs")]
         [SerializeField] private GameObject ropePrefab;
-        
+        [SerializeField] private GameObject endpointPrefab;
+
         [Header("Settings")]
         [SerializeField] private bool autoCheckCollisions = true;
         [SerializeField] private float collisionCheckInterval = 0.1f;
-        
-        private List<IRope> activeRopes = new List<IRope>();
+
+        private List<Rope> activeRopes = new List<Rope>();
         private float lastCollisionCheckTime;
-        
+
+        #region Unity Lifecycle
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -34,7 +41,7 @@ namespace _Project.Scripts.Gameplay.Rope
             Instance = this;
             Initialize();
         }
-        
+
         private void Update()
         {
             if (autoCheckCollisions)
@@ -51,6 +58,9 @@ namespace _Project.Scripts.Gameplay.Rope
                 Instance = null;
             }
         }
+
+        #endregion
+
         #region IManager Implementation
 
         public void Initialize()
@@ -69,9 +79,9 @@ namespace _Project.Scripts.Gameplay.Rope
         {
             foreach (var rope in activeRopes)
             {
-                if (rope != null && rope is MonoBehaviour mb)
+                if (rope != null)
                 {
-                    Destroy(mb.gameObject);
+                    Destroy(rope.gameObject);
                 }
             }
 
@@ -83,56 +93,65 @@ namespace _Project.Scripts.Gameplay.Rope
 
         #region Rope Creation
         
-        public IRope CreateRope(IPin startPin, IPin endPin)
+        public Rope CreateRope(Anchor anchor, Pin.Pin pin, int sortingOrder = 0)
         {
-            if (startPin == null || endPin == null)
+            if (anchor == null || pin == null)
             {
-                Debug.LogError("[RopeManager] Cannot create rope: pins are null!");
+                Debug.LogError("[RopeManager] Cannot create rope: anchor or pin is null!");
+                return null;
+            }
+
+            if (ropePrefab == null)
+            {
+                Debug.LogError("[RopeManager] Rope prefab is not assigned!");
+                return null;
+            }
+
+            if (endpointPrefab == null)
+            {
+                Debug.LogError("[RopeManager] Endpoint prefab is not assigned!");
                 return null;
             }
 
             GameObject ropeObj = Instantiate(ropePrefab, ropeParent);
-            ropeObj.name = $"Rope_{startPin.PinId}_to_{endPin.PinId}";
+            ropeObj.name = $"Rope_A{anchor.AnchorId}_to_P{pin.PinId}";
 
             Rope rope = ropeObj.GetComponent<Rope>();
             if (rope == null)
             {
                 rope = ropeObj.AddComponent<Rope>();
             }
-            
+
+            // Assign rope data
             if (defaultRopeData != null)
             {
-                var field = typeof(Rope).GetField("ropeData", 
-                    System.Reflection.BindingFlags.NonPublic | 
+                var field = typeof(Rope).GetField("ropeData",
+                    System.Reflection.BindingFlags.NonPublic |
                     System.Reflection.BindingFlags.Instance);
                 field?.SetValue(rope, defaultRopeData);
             }
 
-            rope.Initialize(startPin, endPin);
+            rope.Initialize(anchor, pin, endpointPrefab, sortingOrder);
             activeRopes.Add(rope);
 
             return rope;
         }
         
-        public void RemoveRope(IRope rope)
+        public void RemoveRope(Rope rope)
         {
             if (rope == null) return;
 
             activeRopes.Remove(rope);
-
-            if (rope is MonoBehaviour mb)
-            {
-                Destroy(mb.gameObject);
-            }
+            Destroy(rope.gameObject);
         }
         
         public void ClearAllRopes()
         {
             foreach (var rope in activeRopes)
             {
-                if (rope is MonoBehaviour mb)
+                if (rope != null)
                 {
-                    Destroy(mb.gameObject);
+                    Destroy(rope.gameObject);
                 }
             }
 
@@ -140,7 +159,7 @@ namespace _Project.Scripts.Gameplay.Rope
         }
 
         #endregion
-        
+
         #region Collision Detection
 
         private void CheckAllCollisions()
@@ -150,17 +169,21 @@ namespace _Project.Scripts.Gameplay.Rope
 
             lastCollisionCheckTime = Time.time;
 
+            // Reset all collision states
             foreach (var rope in activeRopes)
             {
                 rope.SetHighlight(false);
             }
-            
+
             for (int i = 0; i < activeRopes.Count; i++)
             {
                 for (int j = i + 1; j < activeRopes.Count; j++)
                 {
-                    if (activeRopes[i].CheckCollision(activeRopes[j]))
+                    bool collision = activeRopes[i].CheckCollision(activeRopes[j]);
+            
+                    if (collision)
                     {
+                        Debug.Log($"[RopeManager] COLLISION! Rope {i} <-> Rope {j}"); // ← 
                         activeRopes[i].SetHighlight(true);
                         activeRopes[j].SetHighlight(true);
                     }
@@ -179,9 +202,10 @@ namespace _Project.Scripts.Gameplay.Rope
             return false;
         }
 
-        public List<IRope> GetAllRopes()
+
+        public List<Rope> GetAllRopes()
         {
-            return new List<IRope>(activeRopes);
+            return new List<Rope>(activeRopes);
         }
 
         #endregion

@@ -1,44 +1,65 @@
 ﻿using System.Collections.Generic;
-using _Project.Scripts.Core.Interfaces;
+using _Project.Scripts.Core.Managers;
 using _Project.Scripts.Data.ScriptableObjects;
+using _Project.Scripts.Gameplay.Pin;
+using _Project.Scripts.Gameplay.Rope;
 using DG.Tweening;
 using UnityEngine;
 
 namespace _Project.Scripts.Gameplay.Rope
 {
+    /// <summary>
+    /// Rope connecting an anchor to a pin
+    /// Renders using LineRenderer with natural sag
+    /// </summary>
     [RequireComponent(typeof(LineRenderer))]
-    public class Rope : MonoBehaviour, IRope
+    public class Rope : MonoBehaviour
     {
-        [Header("Configuration")] 
+        [Header("Configuration")]
         [SerializeField] private int ropeId;
         [SerializeField] private RopeData ropeData;
 
-        [Header("Collision Settings")] 
+        [Header("Collision Settings")]
         [SerializeField] private bool checkCollisions = true;
-        [SerializeField] private LayerMask collisionLayers = -1;
+        
+        [Header("Visual Settings")]
+        [SerializeField] private float zOffset = 0f;
+        [SerializeField] private int sortingOrder = 0;
 
         private LineRenderer lineRenderer;
-        private IPin startPin;
-        private IPin endPin;
+        private Anchor anchor;  // Top (fixed)
+        private Pin.Pin currentPin; // Bottom (changeable)
+        private RopeEndpoint endpoint;
+        
+        private Vector3 smoothedEndPos;
+        private Vector3 endVelocity;
+        
         private bool isColliding;
         private Color originalColor;
         private Color collisionColor = Color.red;
         private List<Vector3> ropePoints;
         private Tween colorTween;
-
-        #region Rope Implementation
         
+        private MaterialPropertyBlock materialPropertyBlock;
+
+        #region Properties
+
         public int RopeId => ropeId;
-        public IPin StartPin => startPin;
-        public IPin EndPin => endPin;
+        public Anchor Anchor => anchor;
+        public Pin.Pin CurrentPin => currentPin;
         public bool IsColliding => isColliding;
+        public Vector3 StartPosition => anchor != null ? anchor.Position : Vector3.zero;
+        public Vector3 EndPosition => endpoint != null ? endpoint.transform.position : (currentPin != null ? currentPin.Position : Vector3.zero);
 
         #endregion
+
+        #region Unity Lifecycle
 
         private void Awake()
         {
             lineRenderer = GetComponent<LineRenderer>();
             ropePoints = new List<Vector3>();
+            materialPropertyBlock = new MaterialPropertyBlock();
 
             if (ropeData == null)
             {
@@ -53,7 +74,7 @@ namespace _Project.Scripts.Gameplay.Rope
 
         private void Update()
         {
-            if (startPin != null && endPin != null)
+            if (anchor != null && endpoint != null)
             {
                 UpdateRope();
             }
@@ -66,30 +87,50 @@ namespace _Project.Scripts.Gameplay.Rope
                 ropeId = GetInstanceID();
             }
         }
-        
-        #region IRope Methods
 
-        public void Initialize(IPin startPin, IPin endPin)
+        #endregion
+
+        #region Initialization
+        
+        public void Initialize(Anchor anchor, Pin.Pin pin, GameObject endpointPrefab, int sortingOrder = 0)
         {
-            this.startPin = startPin;
-            this.endPin = endPin;
+            this.anchor = anchor;
+            this.currentPin = pin;
+            this.sortingOrder = sortingOrder;
+    
+            zOffset = sortingOrder * 0.1f;
 
             if (ropeData != null)
             {
                 SetupLineRenderer();
-                originalColor = ropeData.RopeColor;
+                if (originalColor == default || originalColor == Color.clear)
+                    originalColor = ropeData.RopeColor;
+                Debug.Log($"[Rope {ropeId}] Initialized. Original color from RopeData: {originalColor}"); // ← LOG
             }
-            
+
+            // Create endpoint
+            if (endpointPrefab != null)
+            {
+                GameObject endpointObj = Instantiate(endpointPrefab, transform);
+                endpointObj.name = "Endpoint";
+                endpoint = endpointObj.GetComponent<RopeEndpoint>();
+        
+                if (endpoint != null)
+                {
+                    endpoint.Initialize(this, pin);
+                }
+            }
+
             UpdateRope();
-            
-#if UNITY_EDITOR
-            Debug.Log($"[Rope {ropeId}] Initialized between Pin {startPin.PinId} and Pin {endPin.PinId}");
-#endif
         }
+
+        #endregion
+
+        #region Rope Update
 
         public void UpdateRope()
         {
-            if (startPin == null || endPin == null || lineRenderer == null) return;
+            if (anchor == null || endpoint == null || lineRenderer == null) return;
 
             CalculateRopePoints();
 
@@ -97,62 +138,139 @@ namespace _Project.Scripts.Gameplay.Rope
             lineRenderer.SetPositions(ropePoints.ToArray());
         }
 
-        public bool CheckCollision(IRope otherRope)
+        #endregion
+
+        #region Endpoint Movement
+        
+        public void OnEndpointMoved(Pin.Pin newPin, Pin.Pin oldPin)
+        {
+            currentPin = newPin;
+            
+            if (LevelManager.Instance != null)
+            {
+                LevelManager.Instance.IncrementMoveCount();
+            }
+
+            UpdateRope();
+
+            Debug.Log($"[Rope {ropeId}] Moved from Pin {oldPin?.PinId} to Pin {newPin.PinId}");
+        }
+
+        #endregion
+
+        #region Collision Detection
+
+        public bool CheckCollision(Rope otherRope)
         {
             if (!checkCollisions || otherRope == null || otherRope == this) return false;
 
             bool collision = LineSegmentsIntersect(
-                startPin.Position,
-                endPin.Position,
-                otherRope.StartPin.Position,
-                otherRope.EndPin.Position
+                StartPosition,
+                EndPosition,
+                otherRope.StartPosition,
+                otherRope.EndPosition
             );
-            
+
             return collision;
-        }
-
-        public void SetColor(Color color)
-        {
-            if (lineRenderer == null) return;
-            
-            colorTween?.Kill();
-
-            Color currentColor = lineRenderer.startColor;
-
-            colorTween = DOVirtual.Color(
-                currentColor,
-                color,
-                0.3f,
-                c =>
-                {
-                    if (lineRenderer != null)
-                    {
-                        lineRenderer.startColor = c;
-                        lineRenderer.endColor = c;
-                    }
-                }
-            ).SetEase(Ease.OutQuad);
         }
 
         public void SetHighlight(bool highlighted)
         {
             isColliding = highlighted;
-            SetColor(highlighted ? collisionColor : originalColor);
         }
         
-        #endregion
+        public void SetColorImmediate(Color color)
+        {
+            if (lineRenderer == null) return;
+    
+            Debug.Log($"[Rope {ropeId}] SetColorImmediate: {color}");
+    
+            // Update original color
+            if (!isColliding)
+            {
+                originalColor = color;
+                Debug.Log($"[Rope {ropeId}] Original color updated to: {originalColor}");
+            }
+    
+            // Kill any ongoing animation
+            colorTween?.Kill();
+    
+            // Set color immediately
+            lineRenderer.startColor = color;
+            lineRenderer.endColor = color;
+    
+            if (materialPropertyBlock == null)
+                materialPropertyBlock = new MaterialPropertyBlock();
         
-        #region Rope Calculation
+            lineRenderer.GetPropertyBlock(materialPropertyBlock);
+            materialPropertyBlock.SetColor("_BaseColor", color);
+            materialPropertyBlock.SetColor("_Color", color);
+            lineRenderer.SetPropertyBlock(materialPropertyBlock);
+        }
+
+        private bool LineSegmentsIntersect(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4)
+        {
+            // 3D line-line distance check
+            // If minimum distance between two line segments is less than threshold, they collide
+    
+            Vector3 u = p2 - p1;
+            Vector3 v = p4 - p3;
+            Vector3 w = p1 - p3;
+    
+            float a = Vector3.Dot(u, u);
+            float b = Vector3.Dot(u, v);
+            float c = Vector3.Dot(v, v);
+            float d = Vector3.Dot(u, w);
+            float e = Vector3.Dot(v, w);
+    
+            float D = a * c - b * b;
+            float sc, tc;
+    
+            // Check if lines are parallel
+            if (D < 0.00001f)
+            {
+                sc = 0.0f;
+                tc = (b > c ? d / b : e / c);
+            }
+            else
+            {
+                sc = (b * e - c * d) / D;
+                tc = (a * e - b * d) / D;
+            }
+    
+            // Clamp to segment
+            sc = Mathf.Clamp01(sc);
+            tc = Mathf.Clamp01(tc);
+    
+            // Get closest points
+            Vector3 closestPoint1 = p1 + sc * u;
+            Vector3 closestPoint2 = p3 + tc * v;
+    
+            // Calculate distance
+            float distance = Vector3.Distance(closestPoint1, closestPoint2);
+    
+            // Collision threshold (rope width)
+            float collisionThreshold = ropeData != null ? ropeData.CollisionRadius : 0.2f;
+    
+            return distance < collisionThreshold;
+        }
+
+        #endregion
+
+        #region Visual
 
         private void SetupLineRenderer()
         {
             if (lineRenderer == null || ropeData == null) return;
-            
+
             lineRenderer.startWidth = ropeData.RopeWidth;
             lineRenderer.endWidth = ropeData.RopeWidth;
             lineRenderer.material = ropeData.RopeMaterial;
+    
+            // İLK RENK: RopeData'dan (ama hemen override edilecek)
             lineRenderer.startColor = ropeData.RopeColor;
             lineRenderer.endColor = ropeData.RopeColor;
+    
             lineRenderer.numCapVertices = 5;
             lineRenderer.numCornerVertices = 5;
             lineRenderer.useWorldSpace = true;
@@ -168,13 +286,13 @@ namespace _Project.Scripts.Gameplay.Rope
 
             if (ropeData == null || ropeData.SegmentCount < 2)
             {
-                ropePoints.Add(startPin.Position);
-                ropePoints.Add(endPin.Position);
+                ropePoints.Add(StartPosition);
+                ropePoints.Add(EndPosition);
                 return;
             }
 
-            Vector3 start = startPin.Position;
-            Vector3 end = endPin.Position;
+            Vector3 start = StartPosition;
+            Vector3 end = EndPosition;
 
             float distance = Vector3.Distance(start, end);
             float sagAmount = distance * ropeData.Smoothness * 0.2f;
@@ -182,69 +300,66 @@ namespace _Project.Scripts.Gameplay.Rope
             for (int i = 0; i <= ropeData.SegmentCount; i++)
             {
                 float t = i / (float)ropeData.SegmentCount;
-                
+
                 Vector3 point = Vector3.Lerp(start, end, t);
-                
+
                 float sag = Mathf.Sin(t * Mathf.PI) * sagAmount;
                 point.y -= sag;
-                
+        
+                // Z-offset ekle (depth için)
+                point.z += zOffset;
+
                 ropePoints.Add(point);
             }
         }
+
+        public void SetColor(Color color)
+        {
+            if (lineRenderer == null) return;
+
+            Debug.Log($"[Rope {ropeId}] SetColor (animated) called with: {color}");
+
+            // Update original color if not in collision
+            if (!isColliding)
+            {
+                originalColor = color;
+            }
+
+            colorTween?.Kill();
+
+            Color currentColor = lineRenderer.startColor;
+
+            colorTween = DOVirtual.Color(
+                currentColor,
+                color,
+                0.3f,
+                c =>
+                {
+                    if (lineRenderer != null)
+                    {
+                        lineRenderer.startColor = c;
+                        lineRenderer.endColor = c;
+                
+                        if (materialPropertyBlock == null)
+                            materialPropertyBlock = new MaterialPropertyBlock();
+                    
+                        lineRenderer.GetPropertyBlock(materialPropertyBlock);
+                        materialPropertyBlock.SetColor("_BaseColor", c);
+                        materialPropertyBlock.SetColor("_Color", c);
+                        lineRenderer.SetPropertyBlock(materialPropertyBlock);
+                    }
+                }
+            ).SetEase(Ease.OutQuad);
+        }
         
         #endregion
-        
-        #region Collision Detection
 
-        private bool LineSegmentsIntersect(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4)
-        {
-            Vector2 a1 = new Vector2(p1.x, p1.z);
-            Vector2 a2 = new Vector2(p2.x, p2.z);
-            Vector2 b1 = new Vector2(p3.x, p3.z);
-            Vector2 b2 = new Vector2(p4.x, p4.z);
-            
-            return LineSegmentsIntersect2D(a1, a2, b1, b2);
-        }
+        #region Animations
 
-        private bool LineSegmentsIntersect2D(Vector2 p1, Vector2 p2, Vector2 p3, Vector2 p4)
-        {
-            float d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
-            
-            if (Mathf.Abs(d) < 0.0001f) return false;
-            
-            float t = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d;
-            float u = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / d;
-
-            return t >= 0 && t <= 1 && u >= 0 && u <= 1;
-        }
-        
-        #endregion
-        
-        #region Public Methods
-        
-        public float GetRopeLength()
-        {
-            if (startPin == null || endPin == null)
-                return 0f;
-
-            return Vector3.Distance(startPin.Position, endPin.Position);
-        }
-        
-        public bool IsTaut(float threshold = 0.1f)
-        {
-            if (startPin == null || endPin == null)
-                return false;
-
-            float currentLength = GetRopeLength();
-            float straightLength = Vector3.Distance(startPin.Position, endPin.Position);
-            
-            return Mathf.Abs(currentLength - straightLength) < threshold;
-        }
-        
         public void PlaySuccessAnimation()
         {
             Sequence sequence = DOTween.Sequence();
-            
+
             sequence.Append(DOVirtual.Color(
                 lineRenderer.startColor,
                 Color.green,
@@ -258,7 +373,7 @@ namespace _Project.Scripts.Gameplay.Rope
                     }
                 }
             ));
-            
+
             sequence.Append(DOVirtual.Float(
                 1f,
                 0f,
@@ -274,31 +389,31 @@ namespace _Project.Scripts.Gameplay.Rope
                     }
                 }
             ));
-            
+
             sequence.OnComplete(() => gameObject.SetActive(false));
         }
-        
+
         #endregion
-        
+
         #region Gizmos
 
         private void OnDrawGizmos()
         {
-            if (startPin != null && endPin != null)
+            if (anchor != null && currentPin != null)
             {
                 Gizmos.color = isColliding ? Color.red : Color.green;
-                Gizmos.DrawLine(startPin.Position, endPin.Position);
+                Gizmos.DrawLine(anchor.Position, currentPin.Position);
             }
         }
 
         private void OnDrawGizmosSelected()
         {
-            if (startPin != null && endPin != null)
+            if (anchor != null && currentPin != null)
             {
                 Gizmos.color = Color.yellow;
-                Gizmos.DrawWireSphere(startPin.Position, 0.1f);
-                Gizmos.DrawWireSphere(endPin.Position, 0.1f);
-                Gizmos.DrawLine(startPin.Position, endPin.Position);
+                Gizmos.DrawWireSphere(anchor.Position, 0.1f);
+                Gizmos.DrawWireSphere(currentPin.Position, 0.1f);
+                Gizmos.DrawLine(anchor.Position, currentPin.Position);
             }
         }
 
