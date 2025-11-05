@@ -1,4 +1,5 @@
-﻿using _Project.Scripts.Gameplay.Input;
+﻿using _Project.Scripts.Core.Managers;
+using _Project.Scripts.Gameplay.Input;
 using UnityEngine;
 
 namespace _Project.Scripts.Gameplay.Pin
@@ -90,9 +91,14 @@ namespace _Project.Scripts.Gameplay.Pin
             if (currentDraggedPin == null) return;
 
             Debug.Log($"[PinDragController] Released Pin {currentDraggedPin.PinId}");
-            
+    
             currentDraggedPin.EndDrag();
             currentDraggedPin = null;
+            
+            if (LevelManager.Instance != null)
+            {
+                LevelManager.Instance.IncrementMoveCount();
+            }
         }
 
         private Vector3 GetWorldPositionOnDragPlane()

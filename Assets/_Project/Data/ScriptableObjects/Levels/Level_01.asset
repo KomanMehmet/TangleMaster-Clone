@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 714d66d3ee7a4c98a0a133bc82473937, type: 3}
+  m_Name: Level_01
+  m_EditorClassIdentifier: Assembly-CSharp::_Project.Scripts.Data.ScriptableObjects.LevelData
+  levelNumber: 1
+  levelName: Level 1
+  difficulty: 0
+  pins:
+  - pinId: 0
+    position: {x: 0, y: 0, z: 2}
+    isDraggable: 1
+    customColor: {r: 0, g: 0.8893428, b: 1, a: 1}
+  - pinId: 1
+    position: {x: 2, y: 0, z: 0}
+    isDraggable: 1
+    customColor: {r: 0, g: 0.8901961, b: 1, a: 1}
+  - pinId: 2
+    position: {x: 0, y: 0, z: -2}
+    isDraggable: 1
+    customColor: {r: 0, g: 0.8901961, b: 1, a: 1}
+  - pinId: 3
+    position: {x: -2, y: 0, z: 0}
+    isDraggable: 1
+    customColor: {r: 0, g: 0.8901961, b: 1, a: 1}
+  ropes:
+  - startPinIndex: 0
+    endPinIndex: 2
+    customColor: {r: 0, g: 0, b: 0, a: 0}
+  - startPinIndex: 1
+    endPinIndex: 3
+    customColor: {r: 0, g: 0, b: 0, a: 0}
+  winCheckDelay: 0.5
+  requireNoCollisions: 1
+  moveLimit: 0
+  timeLimit: 0

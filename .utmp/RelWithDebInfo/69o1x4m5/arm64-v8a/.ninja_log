@@ -1,0 +1,10 @@
+# ninja log v5
+52	3026	7839593725596588	GameActivity/CMakeFiles/game.dir/UGAInputKeyEvent.cpp.o	d6e729e9c1e8ef81
+31	3036	7839593725576561	GameActivity/CMakeFiles/game.dir/UGAEntry.cpp.o	e43d946ff37e5589
+22	3091	7839593726396584	GameActivity/CMakeFiles/game.dir/UGAConfiguration.cpp.o	150142f9a75348fb
+69	3102	7839593726616591	GameActivity/CMakeFiles/game.dir/UGAInputMotionEvent.cpp.o	d5a70e6c98598fd0
+1	3208	7839593727516563	GameActivity/CMakeFiles/game.dir/UGADebug.cpp.o	965f82709bdefa20
+82	3620	7839593731682671	GameActivity/CMakeFiles/game.dir/UGASoftKeyboard.cpp.o	9c16cabb3c9424ac
+41	3703	7839593732022701	GameActivity/CMakeFiles/game.dir/UGAInput.cpp.o	90d8714f6aad3a9
+12	3933	7839593734843269	GameActivity/CMakeFiles/game.dir/UGAApplication.cpp.o	bb4fb957083511a7
+3933	4163	7839593737243768	D:/Tangle Master 3D Clone/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/RelWithDebInfo/69o1x4m5/obj/arm64-v8a/libgame.so	96edcba67207c821
