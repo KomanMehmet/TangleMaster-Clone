@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a4018867066e41788127004315d26a0f, type: 3}
+  m_Name: DefaultRopeData
+  m_EditorClassIdentifier: Assembly-CSharp::_Project.Scripts.Data.ScriptableObjects.RopeData
+  ropeWidth: 0.15
+  ropeColor: {r: 1, g: 1, b: 1, a: 1}
+  ropeMaterial: {fileID: 2100000, guid: 1d8f273a4355c1544bf4f58f4a235d6a, type: 2}
+  autoCalculateLength: 0
+  manualRopeLength: 3
+  lengthMultiplier: 1.2
+  visualSegments: 20
+  gravity: 0
+  damping: 0.98
+  constraintIterations: 10
+  physicsSegments: 15
+  useWidthForCollision: 1
+  manualCollisionRadius: 0.075
+  collisionPadding: 0.075
+  collisionStiffness: 1
+  collisionDamping: 0.75
+  collisionIterations: 3
+  collisionThreshold: 0.001
+  meshRadialSegments: 16
+  meshUpdateInterval: 1
+  useLowQualityMode: 0

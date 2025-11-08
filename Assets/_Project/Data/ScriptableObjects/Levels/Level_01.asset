@@ -1,0 +1,67 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 714d66d3ee7a4c98a0a133bc82473937, type: 3}
+  m_Name: Level_01
+  m_EditorClassIdentifier: Assembly-CSharp::_Project.Scripts.Data.ScriptableObjects.LevelData
+  levelNumber: 1
+  levelName: Tutorial
+  difficulty: 0
+  anchors:
+  - anchorId: 0
+    position: {x: -1, y: 5, z: 0}
+    customColor: {r: 0, g: 0, b: 0, a: 0}
+  - anchorId: 0
+    position: {x: 0, y: 5, z: 0}
+    customColor: {r: 0, g: 0, b: 0, a: 0}
+  - anchorId: 1
+    position: {x: 1, y: 5, z: 0}
+    customColor: {r: 0, g: 0, b: 0, a: 0}
+  pins:
+  - pinId: 0
+    position: {x: -2, y: 0, z: 0}
+    customColor: {r: 0, g: 0.8893428, b: 1, a: 1}
+  - pinId: 1
+    position: {x: -1, y: 0, z: 0}
+    customColor: {r: 0, g: 0.8901961, b: 1, a: 1}
+  - pinId: 2
+    position: {x: 0, y: 0, z: 0}
+    customColor: {r: 0, g: 0.8901961, b: 1, a: 1}
+  - pinId: 3
+    position: {x: 1, y: 0, z: 0}
+    customColor: {r: 0, g: 0.8901961, b: 1, a: 1}
+  - pinId: 3
+    position: {x: 2, y: 0, z: 0}
+    customColor: {r: 0, g: 0.8901961, b: 1, a: 1}
+  ropes:
+  - anchorIndex: 0
+    pinIndex: 4
+    targetPinIndex: 0
+    sortingOrder: 0
+    depthLayer: 0
+    customColor: {r: 1, g: 0, b: 0, a: 1}
+  - anchorIndex: 1
+    pinIndex: 0
+    targetPinIndex: 0
+    sortingOrder: 0
+    depthLayer: 0
+    customColor: {r: 0, g: 0.8092718, b: 1, a: 1}
+  - anchorIndex: 2
+    pinIndex: 2
+    targetPinIndex: 0
+    sortingOrder: 0
+    depthLayer: 0
+    customColor: {r: 0, g: 1, b: 0.07073355, a: 1}
+  winCheckDelay: 0.5
+  requireNoCollisions: 1
+  allowTangledRopes: 1
+  moveLimit: 4
+  timeLimit: 0
