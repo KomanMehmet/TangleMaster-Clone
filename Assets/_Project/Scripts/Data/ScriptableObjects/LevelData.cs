@@ -21,6 +21,7 @@ namespace _Project.Scripts.Data.ScriptableObjects
         [Header("Win Condition")]
         [SerializeField] private float winCheckDelay = 0.5f;
         [SerializeField] private bool requireNoCollisions = true;
+        [SerializeField] private bool allowTangledRopes = false;
 
         [Header("Optional Settings")]
         [SerializeField] private int moveLimit = 0; // 0 = unlimited
@@ -36,6 +37,7 @@ namespace _Project.Scripts.Data.ScriptableObjects
         public List<RopeConnection> Ropes => ropes;
         public float WinCheckDelay => winCheckDelay;
         public bool RequireNoCollisions => requireNoCollisions;
+        public bool AllowTangledRopes => allowTangledRopes;
         public int MoveLimit => moveLimit;
         public float TimeLimit => timeLimit;
 
@@ -133,10 +135,8 @@ namespace _Project.Scripts.Data.ScriptableObjects
             [Tooltip("Custom color for this pin (optional)")]
             public Color customColor = Color.clear;
         }
-
-        /// <summary>
-        /// Connection between anchor (top) and pin (bottom)
-        /// </summary>
+        
+        
         [System.Serializable]
         public class RopeConnection
         {
@@ -146,8 +146,13 @@ namespace _Project.Scripts.Data.ScriptableObjects
             [Tooltip("Index of pin in the pins list (bottom point, initial)")]
             public int pinIndex;
             
+            [Tooltip("KAZANMA KOŞULU: İpin bu index'teki pine bağlı olması gerekir")]
+            public int targetPinIndex;
+            
             [Tooltip("Sorting order for visual layering (higher = in front)")]
             public int sortingOrder = 0;
+            
+            public int depthLayer = 0;
 
             [Tooltip("Custom color for this rope (optional)")]
             public Color customColor = Color.clear;

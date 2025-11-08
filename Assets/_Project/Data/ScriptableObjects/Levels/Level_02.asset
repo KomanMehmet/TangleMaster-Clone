@@ -13,44 +13,55 @@ MonoBehaviour:
   m_Name: Level_02
   m_EditorClassIdentifier: Assembly-CSharp::_Project.Scripts.Data.ScriptableObjects.LevelData
   levelNumber: 2
-  levelName: Level 2
+  levelName: Cross Roads
   difficulty: 1
+  anchors:
+  - anchorId: 0
+    position: {x: -1, y: 5, z: 0}
+    customColor: {r: 0, g: 0, b: 0, a: 0}
+  - anchorId: 0
+    position: {x: 0, y: 5, z: 0}
+    customColor: {r: 0, g: 0, b: 0, a: 0}
+  - anchorId: 0
+    position: {x: 1, y: 5, z: 0}
+    customColor: {r: 0, g: 0, b: 0, a: 0}
   pins:
   - pinId: 0
-    position: {x: 0, y: 0, z: 3}
-    isDraggable: 1
+    position: {x: -2, y: 0, z: 0}
     customColor: {r: 0, g: 0, b: 0, a: 0}
   - pinId: 1
-    position: {x: 2, y: 0, z: 1.5}
-    isDraggable: 1
+    position: {x: -1, y: 0, z: 0}
     customColor: {r: 0, g: 0, b: 0, a: 0}
   - pinId: 2
-    position: {x: 2, y: 0, z: -1.5}
-    isDraggable: 1
+    position: {x: 0, y: 0, z: 0}
     customColor: {r: 0, g: 0, b: 0, a: 0}
   - pinId: 3
-    position: {x: 0, y: 0, z: -3}
-    isDraggable: 1
+    position: {x: 1, y: 0, z: 0}
     customColor: {r: 0, g: 0, b: 0, a: 0}
   - pinId: 4
-    position: {x: -2, y: 0, z: -1.5}
-    isDraggable: 1
-    customColor: {r: 0, g: 0, b: 0, a: 0}
-  - pinId: 5
-    position: {x: -2, y: 0, z: 1.5}
-    isDraggable: 1
+    position: {x: 2, y: 0, z: 0}
     customColor: {r: 0, g: 0, b: 0, a: 0}
   ropes:
-  - startPinIndex: 0
-    endPinIndex: 3
-    customColor: {r: 0, g: 0, b: 0, a: 0}
-  - startPinIndex: 1
-    endPinIndex: 4
-    customColor: {r: 0, g: 0, b: 0, a: 0}
-  - startPinIndex: 2
-    endPinIndex: 5
-    customColor: {r: 0, g: 0, b: 0, a: 0}
+  - anchorIndex: 0
+    pinIndex: 2
+    targetPinIndex: 0
+    sortingOrder: 0
+    depthLayer: 0
+    customColor: {r: 1, g: 0.073664606, b: 0, a: 0}
+  - anchorIndex: 1
+    pinIndex: 0
+    targetPinIndex: 0
+    sortingOrder: 0
+    depthLayer: 0
+    customColor: {r: 0.03127098, g: 1, b: 0, a: 0}
+  - anchorIndex: 2
+    pinIndex: 1
+    targetPinIndex: 0
+    sortingOrder: 2
+    depthLayer: 0
+    customColor: {r: 0, g: 0.8625617, b: 1, a: 0}
   winCheckDelay: 0.5
   requireNoCollisions: 1
-  moveLimit: 0
+  allowTangledRopes: 0
+  moveLimit: 6
   timeLimit: 0

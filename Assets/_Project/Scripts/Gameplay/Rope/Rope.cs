@@ -1,53 +1,46 @@
 ﻿using System.Collections.Generic;
 using _Project.Scripts.Core.Managers;
 using _Project.Scripts.Data.ScriptableObjects;
-using _Project.Scripts.Gameplay.Pin;
-using _Project.Scripts.Gameplay.Rope;
+using Cysharp.Threading.Tasks;
 using DG.Tweening;
 using UnityEngine;
 
 namespace _Project.Scripts.Gameplay.Rope
 {
-    /// <summary>
-    /// Rope connecting an anchor to a pin
-    /// Renders using LineRenderer with natural sag
-    /// </summary>
-    [RequireComponent(typeof(LineRenderer))]
+    // 3D Mesh için gerekli bileşenler
+    [RequireComponent(typeof(RopePhysics))]
+    [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
     public class Rope : MonoBehaviour
     {
         [Header("Configuration")]
         [SerializeField] private int ropeId;
-        [SerializeField] private RopeData ropeData;
+        [SerializeField] private RopeData ropeData; // Bu artık RopeManager tarafından atanacak
 
-        [Header("Collision Settings")]
-        [SerializeField] private bool checkCollisions = true;
-        
         [Header("Visual Settings")]
-        [SerializeField] private float zOffset = 0f;
         [SerializeField] private int sortingOrder = 0;
+        [SerializeField] private int depthLayer = 0; // Bu, fizik katmanları için kullanılabilir
 
-        private LineRenderer lineRenderer;
-        private Anchor anchor;  // Top (fixed)
-        private Pin.Pin currentPin; // Bottom (changeable)
+        private RopePhysics ropePhysics;
+        private Anchor anchor;
+        private Pin.Pin currentPin;
         private RopeEndpoint endpoint;
         
-        private Vector3 smoothedEndPos;
-        private Vector3 endVelocity;
+        // 3D Mesh için
+        private MeshRenderer meshRenderer;
+        private MaterialPropertyBlock propertyBlock;
         
-        private bool isColliding;
         private Color originalColor;
-        private Color collisionColor = Color.red;
-        private List<Vector3> ropePoints;
         private Tween colorTween;
-        
-        private MaterialPropertyBlock materialPropertyBlock;
 
         #region Properties
 
         public int RopeId => ropeId;
         public Anchor Anchor => anchor;
         public Pin.Pin CurrentPin => currentPin;
-        public bool IsColliding => isColliding;
+        public int DepthLayer => depthLayer;
+        
+        // ❌ IsColliding kaldırıldı (Eski 2D mantıktı)
+        
         public Vector3 StartPosition => anchor != null ? anchor.Position : Vector3.zero;
         public Vector3 EndPosition => endpoint != null ? endpoint.transform.position : (currentPin != null ? currentPin.Position : Vector3.zero);
 
@@ -57,27 +50,23 @@ namespace _Project.Scripts.Gameplay.Rope
 
         private void Awake()
         {
-            lineRenderer = GetComponent<LineRenderer>();
-            ropePoints = new List<Vector3>();
-            materialPropertyBlock = new MaterialPropertyBlock();
+            // LineRenderer'dan kurtulduk, MeshRenderer'ı alıyoruz
+            meshRenderer = GetComponent<MeshRenderer>();
+            propertyBlock = new MaterialPropertyBlock();
+            
+            // RopePhysics'i al
+            ropePhysics = GetComponent<RopePhysics>();
 
-            if (ropeData == null)
+            if (ropeData == null && Application.isPlaying)
             {
-                Debug.LogError($"[Rope {ropeId}] RopeData is not assigned!", this);
+                // RopeManager'ın bunu Initialize'da ataması beklenir
+                Debug.LogWarning($"[Rope {ropeId}] RopeData is not assigned in prefab. Waiting for Initialize.", this);
             }
         }
 
         private void OnDestroy()
         {
             colorTween?.Kill();
-        }
-
-        private void Update()
-        {
-            if (anchor != null && endpoint != null)
-            {
-                UpdateRope();
-            }
         }
 
         private void OnValidate()
@@ -92,22 +81,26 @@ namespace _Project.Scripts.Gameplay.Rope
 
         #region Initialization
         
-        public void Initialize(Anchor anchor, Pin.Pin pin, GameObject endpointPrefab, int sortingOrder = 0)
+        // RopeData artık dışarıdan (RopeManager'dan) veriliyor
+        public void Initialize(RopeData data, Anchor anchor, Pin.Pin pin, GameObject endpointPrefab, int sortingOrder = 0, int depthLayer = 0)
         {
+            this.ropeData = data;
             this.anchor = anchor;
             this.currentPin = pin;
             this.sortingOrder = sortingOrder;
-    
-            zOffset = sortingOrder * 0.1f;
+            this.depthLayer = depthLayer;
 
             if (ropeData != null)
             {
-                SetupLineRenderer();
-                if (originalColor == default || originalColor == Color.clear)
-                    originalColor = ropeData.RopeColor;
-                Debug.Log($"[Rope {ropeId}] Initialized. Original color from RopeData: {originalColor}"); // ← LOG
+                originalColor = ropeData.RopeColor;
+                SetColorImmediate(originalColor); // Rengi mesh'e uygula
             }
-
+            else
+            {
+                Debug.LogError($"[Rope {ropeId}] RopeData is NULL during Initialize!", this);
+                return;
+            }
+            
             // Create endpoint
             if (endpointPrefab != null)
             {
@@ -117,25 +110,18 @@ namespace _Project.Scripts.Gameplay.Rope
         
                 if (endpoint != null)
                 {
+                    endpoint.transform.position = pin.Position;
                     endpoint.Initialize(this, pin);
                 }
             }
+            
+            // Initialize physics
+            if (ropePhysics != null)
+            {
+                ropePhysics.Initialize(anchor.Transform, endpoint.transform, ropeData, this.sortingOrder, this.depthLayer);
+            }
 
-            UpdateRope();
-        }
-
-        #endregion
-
-        #region Rope Update
-
-        public void UpdateRope()
-        {
-            if (anchor == null || endpoint == null || lineRenderer == null) return;
-
-            CalculateRopePoints();
-
-            lineRenderer.positionCount = ropePoints.Count;
-            lineRenderer.SetPositions(ropePoints.ToArray());
+            Debug.Log($"[Rope {ropeId}] Initialized with 3D Mesh Physics");
         }
 
         #endregion
@@ -151,8 +137,6 @@ namespace _Project.Scripts.Gameplay.Rope
                 LevelManager.Instance.IncrementMoveCount();
             }
 
-            UpdateRope();
-
             Debug.Log($"[Rope {ropeId}] Moved from Pin {oldPin?.PinId} to Pin {newPin.PinId}");
         }
 
@@ -160,174 +144,43 @@ namespace _Project.Scripts.Gameplay.Rope
 
         #region Collision Detection
 
-        public bool CheckCollision(Rope otherRope)
-        {
-            if (!checkCollisions || otherRope == null || otherRope == this) return false;
+        // ❌ CheckCollision() ve LineSegmentsIntersect3D() kaldırıldı.
+        // Bu mantık artık RopeCollisionManager ve RopePhysics.CheckCollisionWith tarafından
+        // fiziksel olarak 3D'de yapılıyor.
 
-            bool collision = LineSegmentsIntersect(
-                StartPosition,
-                EndPosition,
-                otherRope.StartPosition,
-                otherRope.EndPosition
-            );
-
-            return collision;
-        }
-
-        public void SetHighlight(bool highlighted)
-        {
-            isColliding = highlighted;
-        }
+        // ❌ SetCollisionState(bool) kaldırıldı.
+        // Renk değişimi için artık fiziksel bir duruma bakmıyoruz,
+        // oyunun kazanma koşulu (LevelManager) karar verecek.
         
-        public void SetColorImmediate(Color color)
-        {
-            if (lineRenderer == null) return;
-    
-            Debug.Log($"[Rope {ropeId}] SetColorImmediate: {color}");
-    
-            // Update original color
-            if (!isColliding)
-            {
-                originalColor = color;
-                Debug.Log($"[Rope {ropeId}] Original color updated to: {originalColor}");
-            }
-    
-            // Kill any ongoing animation
-            colorTween?.Kill();
-    
-            // Set color immediately
-            lineRenderer.startColor = color;
-            lineRenderer.endColor = color;
-    
-            if (materialPropertyBlock == null)
-                materialPropertyBlock = new MaterialPropertyBlock();
-        
-            lineRenderer.GetPropertyBlock(materialPropertyBlock);
-            materialPropertyBlock.SetColor("_BaseColor", color);
-            materialPropertyBlock.SetColor("_Color", color);
-            lineRenderer.SetPropertyBlock(materialPropertyBlock);
-        }
-
-        private bool LineSegmentsIntersect(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4)
-        {
-            // 3D line-line distance check
-            // If minimum distance between two line segments is less than threshold, they collide
-    
-            Vector3 u = p2 - p1;
-            Vector3 v = p4 - p3;
-            Vector3 w = p1 - p3;
-    
-            float a = Vector3.Dot(u, u);
-            float b = Vector3.Dot(u, v);
-            float c = Vector3.Dot(v, v);
-            float d = Vector3.Dot(u, w);
-            float e = Vector3.Dot(v, w);
-    
-            float D = a * c - b * b;
-            float sc, tc;
-    
-            // Check if lines are parallel
-            if (D < 0.00001f)
-            {
-                sc = 0.0f;
-                tc = (b > c ? d / b : e / c);
-            }
-            else
-            {
-                sc = (b * e - c * d) / D;
-                tc = (a * e - b * d) / D;
-            }
-    
-            // Clamp to segment
-            sc = Mathf.Clamp01(sc);
-            tc = Mathf.Clamp01(tc);
-    
-            // Get closest points
-            Vector3 closestPoint1 = p1 + sc * u;
-            Vector3 closestPoint2 = p3 + tc * v;
-    
-            // Calculate distance
-            float distance = Vector3.Distance(closestPoint1, closestPoint2);
-    
-            // Collision threshold (rope width)
-            float collisionThreshold = ropeData != null ? ropeData.CollisionRadius : 0.2f;
-    
-            return distance < collisionThreshold;
-        }
-
         #endregion
 
-        #region Visual
+        #region Color
 
-        private void SetupLineRenderer()
+        // MeshRenderer'ı anında günceller
+        public void SetColorImmediate(Color color)
         {
-            if (lineRenderer == null || ropeData == null) return;
+            if (meshRenderer == null) return;
 
-            lineRenderer.startWidth = ropeData.RopeWidth;
-            lineRenderer.endWidth = ropeData.RopeWidth;
-            lineRenderer.material = ropeData.RopeMaterial;
-    
-            // İLK RENK: RopeData'dan (ama hemen override edilecek)
-            lineRenderer.startColor = ropeData.RopeColor;
-            lineRenderer.endColor = ropeData.RopeColor;
-    
-            lineRenderer.numCapVertices = 5;
-            lineRenderer.numCornerVertices = 5;
-            lineRenderer.useWorldSpace = true;
-
-            lineRenderer.generateLightingData = true;
-            lineRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            lineRenderer.receiveShadows = false;
+            originalColor = color;
+            colorTween?.Kill();
+            
+            // MaterialPropertyBlock kullanarak rengi set et (daha performanslı)
+            meshRenderer.GetPropertyBlock(propertyBlock);
+            propertyBlock.SetColor("_BaseColor", color); // URP/Lit için
+            propertyBlock.SetColor("_Color", color); // Standard shader için
+            meshRenderer.SetPropertyBlock(propertyBlock);
         }
 
-        private void CalculateRopePoints()
-        {
-            ropePoints.Clear();
-
-            if (ropeData == null || ropeData.SegmentCount < 2)
-            {
-                ropePoints.Add(StartPosition);
-                ropePoints.Add(EndPosition);
-                return;
-            }
-
-            Vector3 start = StartPosition;
-            Vector3 end = EndPosition;
-
-            float distance = Vector3.Distance(start, end);
-            float sagAmount = distance * ropeData.Smoothness * 0.2f;
-
-            for (int i = 0; i <= ropeData.SegmentCount; i++)
-            {
-                float t = i / (float)ropeData.SegmentCount;
-
-                Vector3 point = Vector3.Lerp(start, end, t);
-
-                float sag = Mathf.Sin(t * Mathf.PI) * sagAmount;
-                point.y -= sag;
-        
-                // Z-offset ekle (depth için)
-                point.z += zOffset;
-
-                ropePoints.Add(point);
-            }
-        }
-
+        // Renk geçişini DOTween ile yapar
         public void SetColor(Color color)
         {
-            if (lineRenderer == null) return;
+            if (meshRenderer == null) return;
 
-            Debug.Log($"[Rope {ropeId}] SetColor (animated) called with: {color}");
-
-            // Update original color if not in collision
-            if (!isColliding)
-            {
-                originalColor = color;
-            }
-
+            originalColor = color;
             colorTween?.Kill();
 
-            Color currentColor = lineRenderer.startColor;
+            meshRenderer.GetPropertyBlock(propertyBlock);
+            Color currentColor = propertyBlock.GetColor("_BaseColor");
 
             colorTween = DOVirtual.Color(
                 currentColor,
@@ -335,18 +188,11 @@ namespace _Project.Scripts.Gameplay.Rope
                 0.3f,
                 c =>
                 {
-                    if (lineRenderer != null)
+                    if (meshRenderer != null)
                     {
-                        lineRenderer.startColor = c;
-                        lineRenderer.endColor = c;
-                
-                        if (materialPropertyBlock == null)
-                            materialPropertyBlock = new MaterialPropertyBlock();
-                    
-                        lineRenderer.GetPropertyBlock(materialPropertyBlock);
-                        materialPropertyBlock.SetColor("_BaseColor", c);
-                        materialPropertyBlock.SetColor("_Color", c);
-                        lineRenderer.SetPropertyBlock(materialPropertyBlock);
+                        propertyBlock.SetColor("_BaseColor", c);
+                        propertyBlock.SetColor("_Color", c);
+                        meshRenderer.SetPropertyBlock(propertyBlock);
                     }
                 }
             ).SetEase(Ease.OutQuad);
@@ -356,42 +202,11 @@ namespace _Project.Scripts.Gameplay.Rope
 
         #region Animations
 
-        public void PlaySuccessAnimation()
-        {
-            Sequence sequence = DOTween.Sequence();
-
-            sequence.Append(DOVirtual.Color(
-                lineRenderer.startColor,
-                Color.green,
-                0.2f,
-                c =>
-                {
-                    if (lineRenderer != null)
-                    {
-                        lineRenderer.startColor = c;
-                        lineRenderer.endColor = c;
-                    }
-                }
-            ));
-
-            sequence.Append(DOVirtual.Float(
-                1f,
-                0f,
-                0.3f,
-                alpha =>
-                {
-                    if (lineRenderer != null)
-                    {
-                        Color c = lineRenderer.startColor;
-                        c.a = alpha;
-                        lineRenderer.startColor = c;
-                        lineRenderer.endColor = c;
-                    }
-                }
-            ));
-
-            sequence.OnComplete(() => gameObject.SetActive(false));
-        }
+        // ❌ PlayRollUpAnimation() ve StartRollUpSequence() kaldırıldı.
+        // Bu animasyonlar LineRenderer'a özeldi.
+        // 3D Mesh için bunun ya bir shader (dissolve) ile
+        // ya da mesh'i küçülten bir animasyonla yapılması lazım.
+        // Bu, temizlikten sonraki "yeni özellik" adımı.
 
         #endregion
 
@@ -399,20 +214,11 @@ namespace _Project.Scripts.Gameplay.Rope
 
         private void OnDrawGizmos()
         {
+            // Eski 2D çarpışma Gizm'osu kaldırıldı.
+            // Gerçek fizik Gizm'osu artık RopePhysics.cs içinde.
             if (anchor != null && currentPin != null)
             {
-                Gizmos.color = isColliding ? Color.red : Color.green;
-                Gizmos.DrawLine(anchor.Position, currentPin.Position);
-            }
-        }
-
-        private void OnDrawGizmosSelected()
-        {
-            if (anchor != null && currentPin != null)
-            {
-                Gizmos.color = Color.yellow;
-                Gizmos.DrawWireSphere(anchor.Position, 0.1f);
-                Gizmos.DrawWireSphere(currentPin.Position, 0.1f);
+                Gizmos.color = Color.gray;
                 Gizmos.DrawLine(anchor.Position, currentPin.Position);
             }
         }

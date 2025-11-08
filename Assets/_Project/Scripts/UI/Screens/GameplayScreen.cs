@@ -41,7 +41,40 @@ namespace _Project.Scripts.UI.Screens
         {
             if (LevelManager.Instance != null && LevelManager.Instance.IsLevelActive)
             {
-                UpdateMoveCount(LevelManager.Instance.MoveCount);
+                UpdateMoveCount(LevelManager.Instance.MovesRemaining);
+            }
+        }
+        
+        private void UpdateGameplayUI()
+        {
+            if (LevelManager.Instance == null) return;
+
+            // Level number
+            if (levelNumberText != null)
+            {
+                levelNumberText.text = $"Level {LevelManager.Instance.CurrentLevelIndex + 1}";
+            }
+
+            // Moves remaining
+            if (moveCountText != null)
+            {
+                int moves = LevelManager.Instance.MovesRemaining;
+                if (moves == -1)
+                {
+                    moveCountText.text = "Moves: ∞";
+                }
+                else
+                {
+                    moveCountText.text = $"Moves: {moves}";
+                    
+                    // Color coding
+                    if (moves <= 1)
+                        moveCountText.color = Color.red;
+                    else if (moves <= 3)
+                        moveCountText.color = Color.yellow;
+                    else
+                        moveCountText.color = Color.white;
+                }
             }
         }
         
@@ -53,7 +86,7 @@ namespace _Project.Scripts.UI.Screens
             if (LevelManager.Instance != null)
             {
                 UpdateLevelNumber(LevelManager.Instance.CurrentLevel?.LevelNumber ?? 1);
-                UpdateMoveCount(LevelManager.Instance.MoveCount);
+                UpdateMoveCount(LevelManager.Instance.MovesRemaining);
             }
         }
 

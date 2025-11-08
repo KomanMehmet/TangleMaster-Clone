@@ -7,16 +7,16 @@ using UnityEngine.UI;
 
 namespace _Project.Scripts.UI.Screens
 {
-    public class WinScreen : UIScreen
+    public class FailScreen : UIScreen
     {
         [Header("UI References")]
-        [SerializeField] private TMP_Text winLevelText;
-        [SerializeField] private TMP_Text winMovesText;
-        [SerializeField] private TMP_Text winTimeText;
+        [SerializeField] private TMP_Text failLevelText;
+        [SerializeField] private TMP_Text failMovesText;
+        [SerializeField] private TMP_Text failTimeText;
         
         [Header("Win Panel")]
-        [SerializeField] private Button nextLevelButton;
-        [SerializeField] private Button restartWinButton;
+        [SerializeField] private Button mainMenuButton;
+        [SerializeField] private Button restartButton;
         
         [Header("Animation")]
         [SerializeField] private CanvasGroup statsGroup;
@@ -25,14 +25,14 @@ namespace _Project.Scripts.UI.Screens
         protected override void Awake()
         {
             base.Awake();
-            screenName = "WinScreen";
+            screenName = "FailScreen";
         }
 
         protected override void OnBeforeShow()
         {
             base.OnBeforeShow();
             
-            UpdateWinData();
+            UpdateFailData();
             
             if (statsGroup != null)
             {
@@ -47,23 +47,23 @@ namespace _Project.Scripts.UI.Screens
             AnimateStatsIn();
         }
 
-        private void UpdateWinData()
+        private void UpdateFailData()
         {
             if (LevelManager.Instance == null) return;
 
-            if (winLevelText != null)
+            if (failLevelText != null)
             {
-                winLevelText.text = $"Level {LevelManager.Instance.CurrentLevel.LevelNumber}\nComplete!";
+                failLevelText.text = $"Level {LevelManager.Instance.CurrentLevel.LevelNumber}\nFailed!";
             }
 
-            if (winMovesText != null)
+            if (failMovesText != null)
             {
-                winMovesText.text = $"Moves: {LevelManager.Instance.MovesRemaining}";
+                failMovesText.text = $"Moves: {LevelManager.Instance.MovesRemaining}";
             }
 
-            if (winTimeText != null)
+            if (failTimeText != null)
             {
-                winTimeText.text = $"Time: {LevelManager.Instance.ElapsedTime:F2}s";
+                failTimeText.text = $"Time: {LevelManager.Instance.ElapsedTime:F2}s";
             }
         }
 
@@ -78,19 +78,19 @@ namespace _Project.Scripts.UI.Screens
 
         #region Button Handlers
 
-        public void OnNextLevelButtonClicked()
-        {
-            if (LevelManager.Instance != null)
-            {
-                LevelManager.Instance.LoadNextLevel();
-            }
-        }
-
         public void OnRestartButtonClicked()
         {
             if (LevelManager.Instance != null)
             {
                 LevelManager.Instance.ReloadLevel();
+            }
+        }
+
+        public void OnMainMenuButtonClicked()
+        {
+            if (LevelManager.Instance != null)
+            {
+                LevelManager.Instance.LoadMainMenu();
             }
         }
 

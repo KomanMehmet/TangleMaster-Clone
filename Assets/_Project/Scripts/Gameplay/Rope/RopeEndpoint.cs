@@ -4,10 +4,6 @@ using System.Collections.Generic;
 
 namespace _Project.Scripts.Gameplay.Rope
 {
-    /// <summary>
-    /// Draggable endpoint of a rope
-    /// Can be moved between pins
-    /// </summary>
     [RequireComponent(typeof(Collider))]
     public class RopeEndpoint : MonoBehaviour
     {
@@ -25,11 +21,11 @@ namespace _Project.Scripts.Gameplay.Rope
         private bool isDragging;
         private Vector3 dragOffset;
         private Vector3 originalScale;
-        private float startZ;
         
         private Renderer endpointRenderer;
         private MaterialPropertyBlock propertyBlock;
         private Tween scaleTween;
+        private float zOffset = 0f;
 
         #region Properties
 
@@ -65,9 +61,8 @@ namespace _Project.Scripts.Gameplay.Rope
         {
             parentRope = rope;
             currentPin = initialPin;
-            
-            transform.position = initialPin.Position;
-
+    
+            transform.position = initialPin.Position; // Z offset yok
             initialPin.AttachRope(rope);
         }
 
@@ -81,8 +76,6 @@ namespace _Project.Scripts.Gameplay.Rope
 
             isDragging = true;
             dragOffset = transform.position - worldPosition;
-            
-            startZ = transform.position.z;
             
             currentPin.DetachRope();
 
@@ -100,9 +93,9 @@ namespace _Project.Scripts.Gameplay.Rope
 
             Vector3 targetPos = worldPosition + dragOffset;
             targetPos.y = dragHeight;
-            targetPos.z = startZ;
+    
             transform.position = targetPos;
-            
+    
             Pin.Pin closestPin = FindClosestAvailablePin();
             HighlightNearbyPins(true, closestPin);
         }
@@ -113,26 +106,21 @@ namespace _Project.Scripts.Gameplay.Rope
 
             isDragging = false;
             
-            // Find nearest available pin
             Pin.Pin nearestPin = FindClosestAvailablePin();
             
             if (nearestPin != null && Vector3.Distance(transform.position, nearestPin.Position) < snapDistance)
             {
-                // Snap to new pin
                 AttachToPin(nearestPin);
             }
             else
             {
-                // Return to original pin
                 AttachToPin(currentPin);
                 Debug.Log($"[RopeEndpoint] No valid pin nearby, returning to Pin {currentPin.PinId}");
             }
             
-            // Visual feedback
             SetColor(normalColor);
             AnimateScale(originalScale);
             
-            // Remove highlights
             HighlightNearbyPins(false);
         }
 
@@ -144,29 +132,23 @@ namespace _Project.Scripts.Gameplay.Rope
         {
             if (pin == null) return;
 
-            // Detach from old pin
             if (currentPin != null && currentPin != pin)
             {
                 currentPin.DetachRope();
             }
 
-            // Update current pin
             Pin.Pin oldPin = currentPin;
             currentPin = pin;
 
-            // Attach to new pin
             pin.AttachRope(parentRope);
 
-            // Snap to pin position with animation
-            transform.DOMove(pin.Position, 0.2f).SetEase(Ease.OutBack);
+            Vector3 targetPos = pin.Position;
+            transform.DOMove(targetPos, 0.2f).SetEase(Ease.OutBack);
 
-            // Notify parent rope
             if (parentRope != null)
             {
                 parentRope.OnEndpointMoved(pin, oldPin);
             }
-
-            Debug.Log($"[RopeEndpoint] Attached to Pin {pin.PinId}");
         }
 
         #endregion
@@ -182,7 +164,6 @@ namespace _Project.Scripts.Gameplay.Rope
 
             foreach (Pin.Pin pin in allPins)
             {
-                // Can use current pin or any available pin
                 if (pin != currentPin && !pin.CanAcceptRope())
                     continue;
 
@@ -225,7 +206,6 @@ namespace _Project.Scripts.Gameplay.Rope
         {
             if (specificPin != null)
             {
-                // Only highlight specific pin
                 Pin.Pin[] allPins = FindObjectsOfType<Pin.Pin>();
                 foreach (Pin.Pin pin in allPins)
                 {
@@ -234,7 +214,6 @@ namespace _Project.Scripts.Gameplay.Rope
             }
             else
             {
-                // Highlight all nearby available pins
                 List<Pin.Pin> nearbyPins = GetNearbyPins(snapDistance * 2f);
                 foreach (Pin.Pin pin in nearbyPins)
                 {

@@ -117,11 +117,14 @@ namespace _Project.Scripts.Gameplay.Rope
 
             if (dragPlane.Raycast(ray, out float distance))
             {
-                return ray.GetPoint(distance);
+                Vector3 pos = ray.GetPoint(distance);
+                pos.z = 0f;
+                return pos;
             }
-
-            // Fallback
-            return currentDraggedEndpoint != null ? currentDraggedEndpoint.transform.position : Vector3.zero;
+            
+            Vector3 fallback = currentDraggedEndpoint != null ? currentDraggedEndpoint.transform.position : Vector3.zero;
+            fallback.z = 0f;
+            return fallback;
         }
 
         #endregion

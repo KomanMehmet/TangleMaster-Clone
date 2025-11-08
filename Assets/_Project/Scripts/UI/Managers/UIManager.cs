@@ -3,6 +3,7 @@ using System.Threading;
 using _Project.Scripts.Core.EventChannels;
 using _Project.Scripts.Core.Interfaces;
 using Cysharp.Threading.Tasks;
+using TMPro;
 using UnityEngine;
 
 namespace _Project.Scripts.UI.Managers
@@ -137,8 +138,7 @@ namespace _Project.Scripts.UI.Managers
 
         private void OnLevelFailed()
         {
-            // TODO: Show fail screen
-            Debug.Log("[UIManager] Level failed");
+            ShowScreen("FailScreen").Forget();
         }
 
         private void OnGamePaused()
